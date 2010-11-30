@@ -242,6 +242,9 @@
          '(17.2 29.9)))
 
 ;;
-;; E Step
+;; EM-algorithm
 ;;
 
+(defun EM-algorithm (chr coord traits marker-positions &optional (prob #'P-double))
+  (destructuring-bind (left-pos right-pos) (neighbor chr coord marker-positions)
+    (labels ((expectation ()
