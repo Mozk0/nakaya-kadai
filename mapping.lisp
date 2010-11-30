@@ -139,7 +139,7 @@
 (impute-missing-values *traits-qt1*)
 (impute-missing-values *traits-qt2*)
 
-(define-test impution
+(define-test imputation
   (every #'(lambda (trait)
              (and (every #'identity (trait-markers trait))
                   (trait-qt trait)))
@@ -193,8 +193,8 @@
       ((equal key '(2 2)) (- 1.0 r)))))
 
 (defun P-single-backward (marker     left-marker     right-marker
-                         marker-pos left-marker-pos right-marker-pos
-                         &optional (map-function #'Haldane))
+                          marker-pos left-marker-pos right-marker-pos
+                          &optional (map-function #'Haldane))
   (declare (ignore left-marker left-marker-pos))
   (let ((key `(,marker ,right-marker))
         (r (funcall map-function (distance right-marker-pos marker-pos))))
