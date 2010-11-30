@@ -227,24 +227,32 @@
 (defun minimum (seq)
   (reduce #'min seq))
 
-(defun neighbor (chr coord marker-positions)
-  (let* ((coordinates (map 'list #'marker-position-coordinate
-                           (remove-if-not #'(lambda (x)
-                                              (eq (marker-position-chromosome x) chr))
-                                          marker-positions)))
-         (left-neighbor (maximum (remove-if-not #'(lambda (x) (<= x coord))
-                                                coordinates)))
-         (right-neighbor (minimum (remove-if-not #'(lambda (x) (> x coord))
-                                                 coordinates))))
-    (list left-neighbor right-neighbor)))
-(define-test neighbor
-  (equal (neighbor 'C1 22.0 *marker-positions*)
-         '(17.2 29.9)))
+(defun count-while (pred seq)
+  (loop for e across seq
+        for count from 0
+        if (not (funcall pred e))
+        return count))
+
+(defun find-marker-position (chr coord marker-positions)
+  (count-while #'(lambda (mpos)
+                   (or (not (eq chr (marker-position-chromosome mpos)))
+                       (<= (marker-position-coordinate mpos) coord)))
+               marker-positions))
+(define-test find-marker-position
+  (= (find-marker-position 'C3 22 *marker-positions*)
+     27))
+  
 
 ;;
 ;; EM-algorithm
 ;;
 
 (defun EM-algorithm (chr coord traits marker-positions &optional (prob #'P-double))
-  (destructuring-bind (left-pos right-pos) (neighbor chr coord marker-positions)
-    (labels ((expectation ()
+  (let* ((marker-index (find-marker-position chr coord marker-positions))
+         (left-marker-pos (marker-position-coordinate (elt marker-positions marker-index)))
+         (right-marker-pos (marker-position-coordinate (elt marker-positions (1+ marker-index)))))
+    (flet ((left-marker (i)
+             (elt (trait-markers (elt traits i)) marker-index))
+           (right-marker (i)
+             (elt (trait-markers (elt traits i)) (1+ marker-index))))
+      (flet ((expectation 
