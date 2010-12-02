@@ -1,3 +1,6 @@
+(declaim (optimize (speed 0) (debug 3) (compilation-speed 0)
+                   (safety 3) (space 1)))
+
 (defparameter *tests* nil)
 
 (defmacro define-test (name &body body)
@@ -168,7 +171,8 @@
 
 (defun initial-solution (traits)
   (let ((qts (map 'list #'trait-qt traits)))
-    (values (average qts)
+    (values (lambda (k) (declare (ignore k))
+                    (average qts))
             (standard-deviation qts))))
 
 ;;
@@ -176,7 +180,7 @@
 ;;
 (defun Haldane (x) ; (1 - exp(-2x)) / 2
   (/ (- 1
-        (exp (* -2 x)))
+        2(exp (* -2 (/ x 100))))
      2)) 
 (defun distance (x y) (abs (- x y)))
 
@@ -209,7 +213,7 @@
                  &optional (map-function #'Haldane))
   (let ((key `(,marker ,left-marker ,right-marker))
         (r-right (funcall map-function (distance right-marker-pos marker-pos)))
-        (r-left  (funcall map-function (distance right-marker-pos marker-pos)))
+        (r-left  (funcall map-function (distance left-marker-pos marker-pos)))
         (r       (funcall map-function (distance right-marker-pos left-marker-pos))))
     (cond
       ((equal key '(1 1 1)) 1.0)
@@ -221,6 +225,9 @@
       ((equal key '(2 2 1)) (/ r-left r))
       ((equal key '(2 2 2)) 1.0))))
 
+;;
+;;
+;;
 (defun maximum (seq)
   (reduce #'max seq))
 
@@ -241,18 +248,76 @@
 (define-test find-marker-position
   (= (find-marker-position 'C3 22 *marker-positions*)
      27))
-  
 
-;;
-;; EM-algorithm
-;;
+(defmacro sum ((k from to) &rest body)
+  `(loop :for ,k :from ,from :to ,to
+      :summing (progn ,@body)))
 
 (defun EM-algorithm (chr coord traits marker-positions &optional (prob #'P-double))
   (let* ((marker-index (find-marker-position chr coord marker-positions))
-         (left-marker-pos (marker-position-coordinate (elt marker-positions marker-index)))
-         (right-marker-pos (marker-position-coordinate (elt marker-positions (1+ marker-index)))))
-    (flet ((left-marker (i)
-             (elt (trait-markers (elt traits i)) marker-index))
-           (right-marker (i)
-             (elt (trait-markers (elt traits i)) (1+ marker-index))))
-      (flet ((expectation 
+         (left-marker-pos (marker-position-coordinate (elt marker-positions (1- marker-index))))
+         (right-marker-pos (marker-position-coordinate (elt marker-positions marker-index)))
+         (N (length traits)))
+    (flet ((left-marker (i) (elt (trait-markers (elt traits i)) marker-index))
+           (right-marker (i) (elt (trait-markers (elt traits i)) (1+ marker-index))))
+      (flet ((P (i k) (funcall prob k (left-marker i) (right-marker i) coord left-marker-pos right-marker-pos))
+             (y (i) (trait-qt (elt traits i))))
+        (flet ((expectation (m s)
+                 (lambda (i k) ;z_{ik}
+                   (/ (* (P i k) (exp (/ (square (- (y i)
+                                                    (funcall m k)))
+                                         -2
+                                         (square s))))
+                      (sum (j 1 2)
+                           (* (P i j) (exp (/ (square (- (y i)
+                                                         (funcall m j)))
+                                              -2
+                                              (square s))))))))
+               (maximization (z m)
+                 (let ((new-m (lambda (k)
+                                (/ (sum (i 0 (1- N))
+                                        (* (funcall z i k)
+                                           (y i)))
+                                   (sum (i 0 (1- N))
+                                        (funcall z i k)))))
+                       (new-s (sqrt (/ (sum (i 0 (1- N))
+                                            (sum (j 1 2)
+                                                 (* (funcall z i j)
+                                                    (square (- (y i)
+                                                               (funcall m j))))))
+                                       N))))
+                   (let ((m1 (funcall new-m 1)) (m2 (funcall new-m 2)))
+                     (values (lambda (k) (if (= k 1) m1 m2)) new-s)))))
+          (multiple-value-bind (m0 s0) (initial-solution traits)
+            (loop repeat 20
+               for m = m0 then (car ms)
+               and s = s0 then (cadr ms)
+               for z = (expectation m s)
+               for ms = (multiple-value-list (maximization z m))
+               finally (return (values m s)))))))))
+
+;;
+;; Likelihood
+;;
+(defun log-likelihood (m s chr coord traits marker-positions &optional (prob #'P-double))
+  (let* ((marker-index (find-marker-position chr coord marker-positions))
+         (left-marker-pos (marker-position-coordinate (elt marker-positions (1- marker-index))))
+         (right-marker-pos (marker-position-coordinate (elt marker-positions marker-index)))
+         (N (length traits)))
+    (flet ((left-marker (i) (elt (trait-markers (elt traits i)) marker-index))
+           (right-marker (i) (elt (trait-markers (elt traits i)) (1+ marker-index))))
+      (flet ((P (i k) (funcall prob k (left-marker i) (right-marker i) coord left-marker-pos right-marker-pos))
+             (y (i) (trait-qt (elt traits i))))
+        (+ (sum (i 0 (1- N))
+                (log (sum (j 1 2)
+                          (* (P i j) (exp (/ (square (- (y i) (funcall m j)))
+                                             -2
+                                             (square s)))))))
+           (* N (log (sqrt (* 2 3.1415 (square s))))))))))
+
+(defun LOD-score (chr coord traits marker-positions &optional (prob #'P-double))
+  (multiple-value-bind (m s) (EM-algorithm chr coord traits marker-positions prob)
+    (multiple-value-bind (m-null s-null) (initial-solution traits)
+      (- (log-likelihood m s chr coord traits marker-positions prob)
+         (multiple-value-call m-null s-null chr coord traits marker-positions prob)))))
+                 
