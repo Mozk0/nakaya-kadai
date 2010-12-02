@@ -246,5 +246,5 @@
 ;;
 
 (defun EM-algorithm (chr coord traits marker-positions &optional (prob #'P-double))
-  (destructuring-bind (left-pos right-pos) (neighbor chr coord marker-positions)
+  (destructuring-bind (left-coord right-coord) (neighbor chr coord marker-positions)
     (labels ((expectation ()
