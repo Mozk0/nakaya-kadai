@@ -178,9 +178,11 @@
 ;;
 ;; conditional probability
 ;;
+(defun Kosambi (x)
+  (/ (tanh (/ x 50)) 2))
 (defun Haldane (x) ; (1 - exp(-2x)) / 2
   (/ (- 1
-        2(exp (* -2 (/ x 100))))
+        (exp (* -2 (/ x 100))))
      2)) 
 (defun distance (x y) (abs (- x y)))
 
@@ -217,12 +219,12 @@
         (r       (funcall map-function (distance right-marker-pos left-marker-pos))))
     (cond
       ((equal key '(1 1 1)) 1.0)
-      ((equal key '(1 1 2)) (/ r-left r))
-      ((equal key '(1 2 1)) (/ r-right r))
+      ((equal key '(1 1 2)) (/ r-right r))
+      ((equal key '(1 2 1)) (/ r-left r))
       ((equal key '(1 2 2)) 0.0)
       ((equal key '(2 1 1)) 0.0)
-      ((equal key '(2 1 2)) (/ r-right r))
-      ((equal key '(2 2 1)) (/ r-left r))
+      ((equal key '(2 1 2)) (/ r-left r))
+      ((equal key '(2 2 1)) (/ r-right r))
       ((equal key '(2 2 2)) 1.0))))
 
 ;;
@@ -258,8 +260,8 @@
          (left-marker-pos (marker-position-coordinate (elt marker-positions (1- marker-index))))
          (right-marker-pos (marker-position-coordinate (elt marker-positions marker-index)))
          (N (length traits)))
-    (flet ((left-marker (i) (elt (trait-markers (elt traits i)) marker-index))
-           (right-marker (i) (elt (trait-markers (elt traits i)) (1+ marker-index))))
+    (flet ((left-marker (i) (elt (trait-markers (elt traits i)) (1- marker-index)))
+           (right-marker (i) (elt (trait-markers (elt traits i)) marker-index)))
       (flet ((P (i k) (funcall prob k (left-marker i) (right-marker i) coord left-marker-pos right-marker-pos))
              (y (i) (trait-qt (elt traits i))))
         (flet ((expectation (m s)
@@ -304,11 +306,11 @@
          (left-marker-pos (marker-position-coordinate (elt marker-positions (1- marker-index))))
          (right-marker-pos (marker-position-coordinate (elt marker-positions marker-index)))
          (N (length traits)))
-    (flet ((left-marker (i) (elt (trait-markers (elt traits i)) marker-index))
-           (right-marker (i) (elt (trait-markers (elt traits i)) (1+ marker-index))))
+    (flet ((left-marker (i) (elt (trait-markers (elt traits i)) (1- marker-index)))
+           (right-marker (i) (elt (trait-markers (elt traits i)) marker-index)))
       (flet ((P (i k) (funcall prob k (left-marker i) (right-marker i) coord left-marker-pos right-marker-pos))
              (y (i) (trait-qt (elt traits i))))
-        (+ (sum (i 0 (1- N))
+        (- (sum (i 0 (1- N))
                 (log (sum (j 1 2)
                           (* (P i j) (exp (/ (square (- (y i) (funcall m j)))
                                              -2
@@ -319,5 +321,4 @@
   (multiple-value-bind (m s) (EM-algorithm chr coord traits marker-positions prob)
     (multiple-value-bind (m-null s-null) (initial-solution traits)
       (- (log-likelihood m s chr coord traits marker-positions prob)
-         (multiple-value-call m-null s-null chr coord traits marker-positions prob)))))
-                 
+         (log-likelihood m-null s-null chr coord traits marker-positions prob)))))
